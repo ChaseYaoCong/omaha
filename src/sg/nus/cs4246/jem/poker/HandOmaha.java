@@ -10,7 +10,7 @@
  */
 
 
-package poker;
+package sg.nus.cs4246.jem.poker;
 
 public class HandOmaha extends Hand
 {
