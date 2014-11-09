@@ -5,16 +5,14 @@ import java.util.Random;
 
 public class Probability {
 
-    public static final int OPPONENTS = 1;
-    public static final int ITERATIONS = 1000;
+    public static final int ITERATIONS = 10000;
 
     private Cards[] hand;     // Represents the hand
     private Cards[] table;    // Represents to table
     private int handCnt;    // How many cards in on the hand (must be 4)
     private int tableCnt;   // How many cards are on the table
-    private String[] hands;
 
-    private enum Hands {
+    private enum Hands implements Comparable<Hands> {
         HIGH_CARD,
         ONE_PAIR,
         TWO_PAIR,
@@ -40,13 +38,13 @@ public class Probability {
         CQ, DQ, HQ, SQ,
         CK, DK, HK, SK,
         CA, DA, HA, SA;
-
-        public int rank() {
-            return (ordinal() >> 2) + 2;
-        }
-
-        public int suit() {
-            return ordinal() % 2;
+        
+        public int rank;
+        public int suit;
+        
+        private Cards() {
+            rank = (ordinal() >> 2) + 2;
+            suit = ordinal() % 2;
         }
     }
 
@@ -73,18 +71,6 @@ public class Probability {
 
         this.handCnt  = hand.length;
         this.tableCnt = table.length;
-
-        this.hands = new String[]{
-                "HIGH_CARD",
-                "ONE_PAIR",
-                "TWO_PAIR",
-                "THREE_OF_A_KIND",
-                "STRAIGHT",
-                "FLUSH",
-                "FULL_HOUSE",
-                "FOUR_OF_A_KIND",
-                "STRAIGHT_FLUSH"
-        };
     }
 
     // Start the calculation
@@ -97,8 +83,7 @@ public class Probability {
         System.out.println("Chance of winning: " + chanceOfWinning + "%");
 
         // Get the hand strength (two pairs, full house, etc.)
-        String handStrength = hands[getBestHandStrength(hand, Arrays.copyOf(table, tableCnt)) / 1000000];
-        System.out.println("You have: " + handStrength);
+        System.out.println("You have: " + getBestHandType(hand, table));
     }
 
     /**
@@ -110,36 +95,21 @@ public class Probability {
         Deck deck = new Deck(hand, table);
         int roundsWon = 0;
 
-        Cards[][] opponentHands = new Cards[OPPONENTS][4];
+        Cards[] opponentHand = new Cards[4];
         Cards[] possibleTable = Arrays.copyOf(table, 5);
 
         // Play a number of random games, and count how many games we win
         for (int i = 0; i < ITERATIONS; i++) {
             deck.shuffle();
 
-            int m = 0;
+            // Fill the rest of the table and the opponents hand with random cards
+            for (int j = tableCnt; j < 5; j++) possibleTable[j] = deck.drawCard();
+            for (int k = 0; k < 4; k++) opponentHand[k] = deck.drawCard();
 
-            // Fill the rest of the table with random cards
-            for (int j = tableCnt; j < 5; j++) {
-                possibleTable[j] = deck.getCard(m++);
-            }
+            int myHandStrength  = getBestHandStrength(hand, possibleTable);
+            int oppHandStrength = getBestHandStrength(opponentHand, possibleTable);
 
-            // Fill the opponents hand with random cards
-            for (int j = 0; j < OPPONENTS; j++) {
-                for (int k = 0; k < 4; k++) {
-                    opponentHands[j][k] = deck.getCard(m++);
-                }
-            }
-
-            boolean win = true;
-            int myHandStrength = getBestHandStrength(hand, possibleTable);
-
-            int opponent = 0;
-            while (win && opponent < OPPONENTS) {
-                win = (myHandStrength >= getBestHandStrength(opponentHands[opponent++], possibleTable));
-            }
-
-            if (win) roundsWon++;
+            if (myHandStrength >= oppHandStrength) roundsWon++;
         }
 
         return Math.floor(10000 * (((double) roundsWon) / ITERATIONS)) / 100;
@@ -154,17 +124,53 @@ public class Probability {
      * @return int representing the strength of the hand
      */
     private static int getBestHandStrength(Cards[] hand, Cards[] table) {
-        int strength = 0;
+        int bestStrength = -1;
+        for (Cards[] permutation : getHandPermutations(hand, table)) {
+            int thisStrength = calcHandStrength(permutation);
+            if (thisStrength > bestStrength) bestStrength = thisStrength;
+        }
+        return bestStrength;
+    }
 
-        // Run through all possibilities of picking two cards from the hand
+    /**
+     * Finds the best hand type from the cards on hand and on table
+     * @return the best hand type given hand and table
+     */
+    private static Hands getBestHandType(Cards[] hand, Cards[] table) {
+        Hands bestHand = Hands.HIGH_CARD;
+        for (Cards[] permutation : getHandPermutations(hand, table)) {
+            Hands type = getHandType(permutation);
+            if (type.compareTo(bestHand) > 0) bestHand = type;
+        }
+        return bestHand;
+    }
+
+    private static Cards[][] getHandPermutations(Cards[] hand, Cards[] table) {
+
+        /**
+         * Calculate the number of permutations
+         */
+
+        int p = 6;
+        switch(table.length) {
+            case 4: p *= 4;  break;
+            case 5: p *= 10; break;
+        }
+        Cards[][] permutations = new Cards[p][table.length > 2 ? 5 : 2];
+
+        /**
+         * Generate all the possible permutations of chosen cards
+         */
+
+        int permutationCnt = 0;
         for (int i = 0; i < 3; i++) {
             for (int j = i + 1; j < 4; j++) {
                 Cards[] handCards = new Cards[]{hand[i], hand[j]};
 
                 if (table.length < 3) {
                     // No cards on the table
-                    int e = calcHandStrength(handCards, new Cards[0]);
-                    if (e > strength) strength = e;
+                    System.arraycopy(handCards, 0, permutations[permutationCnt], 0, 2);
+                    permutationCnt++;
                 }
                 else {
                     // Run through all possibilities of picking 3 cards from the table
@@ -172,170 +178,144 @@ public class Probability {
                         for (int y = x + 1; y < table.length - 1; y++) {
                             for (int z = y + 1; z < table.length; z++) {
                                 Cards[] tableCards = new Cards[]{table[x], table[y], table[z]};
-                                int e = calcHandStrength(handCards, tableCards);
-                                if (e > strength) strength = e;
+
+                                System.arraycopy(handCards, 0, permutations[permutationCnt], 0, 2);
+                                System.arraycopy(tableCards, 0, permutations[permutationCnt], 2, 3);
+
+                                permutationCnt++;
                             }
                         }
                     }
                 }
             }
         }
-        return strength;
+
+        for (Cards[] cards : permutations) {
+            /**
+             * Sort the cards in descending order
+             */
+            Arrays.sort(cards);
+            for (int i = 0; i < cards.length / 2; i++) {
+                Cards tmp = cards[i];
+                cards[i] = cards[cards.length - 1 - i];
+                cards[cards.length - 1 - i] = tmp;
+            }
+        }
+
+        return permutations;
+    }
+
+    private static Hands getHandType(Cards[] cards) {
+        if (cards.length == 2) {
+            return cards[0].rank == cards[1].rank ? Hands.ONE_PAIR : Hands.HIGH_CARD;
+        }
+
+        // We have 5 cards
+
+        boolean ad =             cards[0].rank == cards[3].rank;
+        boolean ac = ad ||       cards[0].rank == cards[2].rank;
+        boolean ab = ac ||       cards[0].rank == cards[1].rank;
+        boolean be =             cards[1].rank == cards[4].rank;
+        boolean bd = ad || be || cards[1].rank == cards[3].rank;
+        boolean bc = ac || bd || cards[1].rank == cards[2].rank;
+        boolean ce = be ||       cards[2].rank == cards[4].rank;
+        boolean cd = bd ||       cards[2].rank == cards[3].rank;
+        boolean de = ce ||       cards[3].rank == cards[4].rank;
+
+        /**
+         * Check for straight and flush
+         */
+        boolean flush    = true;
+        boolean straight = true;
+        for (int i = 1; i < cards.length; i++) {
+            straight = straight && cards[i - 1].rank == cards[i].rank + 1;
+            flush    = flush && cards[i - 1].suit != cards[i].suit;
+        }
+
+        if (straight && flush)                return Hands.STRAIGHT_FLUSH;
+        if (ad || be)                         return Hands.FOUR_OF_A_KIND;
+        if ((ac && de) || (ab && ce))         return Hands.FULL_HOUSE;
+        if (flush)                            return Hands.FLUSH;
+        if (straight)                         return Hands.STRAIGHT;
+        if (ac || bd || ce)                   return Hands.THREE_OF_A_KIND;
+        if ((ab && (cd || de)) || (bc && de)) return Hands.TWO_PAIR;
+        if (ab || bc || cd || de)             return Hands.ONE_PAIR;
+        return Hands.HIGH_CARD;
     }
     
-    private static int calcHandStrength(Cards[] handCards, Cards[] tableCards) {
-        Cards[] cards = Arrays.copyOf(tableCards,  tableCards.length + handCards.length);
-        System.arraycopy(handCards, 0, cards, tableCards.length, handCards.length);
-
-        // Reverse sort the array
-        Arrays.sort(cards);
-        for (int i = 0; i < cards.length / 2; i++) {
-            Cards tmp = cards[i];
-            cards[i] = cards[cards.length - 1 - i];
-            cards[cards.length - 1 - i] = tmp;
-        }
+    private static int calcHandStrength(Cards[] cards) {
 
         /**
-         * The number of free cards that should be used in the calculation of
-         * the hand value. For ONE_PAIR this is 3 as there are three cards that
-         * that should be evaluated in case of a tie.
+         * Find the cards that makes the hand type and the "free cards". There are a
+         * maximum of two hand cards (two pair and full house have two hand cards while
+         * all other only have one, except for high card that has none)
          */
-        int freeCards = 5;
 
-        /**
-         * The number of the best hand seen so far.
-         *
-         * (0) ONE_PAIR
-         * (1) TWO_PAIR
-         * (2) THREE_OF_A_KIND
-         * (3) STRAIGHT
-         * (4) FLUSH
-         * (5) FULL_HOUSE
-         * (6) FOUR_OF_A_KIND
-         * (7) STRAIGHT_FLUSH
-         *
-         * Corresponds to the ranksOfHand array
-         */
-        Hands bestHand = Hands.HIGH_CARD;
-
-        /**
-         * Keeps track of whether or not a flush is possible
-         */
-        boolean flush = true;
-
-        /**
-         * This holds the ranks of the hand we have. If we have one pair it will
-         * hold the rank of the pair as well as the kicker. If we have two pairs
-         * it will hold the rank of the lowest pair and the highest pair.
-         *
-         * (0) ONE_PAIR        [pair rank      , -1]
-         * (1) TWO_PAIR        [high pair rank , low pair rank]
-         * (2) THREE_OF_A_KIND [rank of 3 kind , -1]
-         * (3) STRAIGHT        [highest card   , -1]
-         * (4) FLUSH           [highest card   , -1]
-         * (5) FULL_HOUSE      [rank of 3 kind , rank of pair]
-         * (6) FOUR_OF_A_KIND  [rank of 4 kind , -1]
-         * (7) STRAIGHT_FLUSH  [highest card   , -1]
-         *
-         * Generalized [most significant, other which is part of the hand]
-         */
-        Cards[] mostSignificantCards = new Cards[]{null, null};
-
-        // Run through cards and check rank only, i.e. ONE_PAIR, TWO_PAIR,
-        // THREE_OF_A_KIND, FULL_HOUSE, FOUR_OF_A_KIND
-        int cardsOfThisRank = 1;
-        for (int i = 1; i < cards.length; i++) {
-            Cards thisCard = cards[i];
-
-            flush = flush && cards[i - 1].suit() != thisCard.suit();
-
-            // This and previous card has same rank
-            if (cards[i - 1].rank() == thisCard.rank()) {
-                cardsOfThisRank++;
-
-                if (cardsOfThisRank == 2 && bestHand == Hands.HIGH_CARD) {
-                    // ONE_PAIR from HIGH_CARD
-                    bestHand = Hands.ONE_PAIR;
-                    mostSignificantCards[0] = cards[i - 1];
-                    freeCards = 3;
-                } else if (cardsOfThisRank == 2) {
-                    // TWO_PAIR from ONE_PAIR
-                    bestHand = Hands.TWO_PAIR;
-                    mostSignificantCards[1] = cards[i - 1];
-                    freeCards = 1;
-                } else if (cardsOfThisRank == 3 && bestHand == Hands.ONE_PAIR) {
-                    // THREE_OF_A_KIND from ONE_PAIR
-                    bestHand = Hands.THREE_OF_A_KIND;
-                    freeCards = 0;
-                } else if (cardsOfThisRank == 2 && bestHand == Hands.THREE_OF_A_KIND) {
-                    // FULL_HOUSE from THREE_OF_A_KIND (5, 5, 5, 7, _7_)
-                    bestHand = Hands.FULL_HOUSE;
-                    mostSignificantCards[1] = cards[i - 1];
-                    freeCards = 0;
-                } else if (cardsOfThisRank == 3 && bestHand == Hands.TWO_PAIR) {
-                    // FULL_HOUSE from TWO_PAIRS (5, 5, 7, 7, _7_)
-                    bestHand = Hands.FULL_HOUSE;
-                    mostSignificantCards[1] = mostSignificantCards[0];
-                    mostSignificantCards[0] = cards[i - 1];
-                    freeCards = 0;
-                } else if (cardsOfThisRank == 4) {
-                    // FOUR_OF_A_KIND from WHATEVER
-                    // TODO check if bestHand is always THREE_OF_A_KIND
-                    bestHand = Hands.FOUR_OF_A_KIND;
-                    freeCards = 0;
-                    break;
-                }
-            } else {
-                cardsOfThisRank = 1;
-            }
-        }
-
-        // Check for STRAIGHT, FLUSH, and STRAIGHT_FLUSH
-        if (bestHand == Hands.HIGH_CARD && cards.length == 5) {
-            boolean straight = cards[0].rank() - cards[4].rank() == 4 || (cards[4].rank() == 5 && cards[0].rank() == 14);
-
-            if (straight || flush) {
-                mostSignificantCards[0] = cards[0];
-                freeCards      = flush ? 5 : 0;
-                bestHand       = (straight && flush) ? Hands.STRAIGHT_FLUSH : (straight ? Hands.STRAIGHT : Hands.FLUSH);
-            }
-        }
-
+        Hands handType = getHandType(cards);
         int handValue = 0;
-        int t         = 28561; // Multiplication factor (13^4)
-
-        // Assign a high weight to the cards that affect the hand value, e.g. the rank of a pair
-        if (mostSignificantCards[0] != null) {
-            handValue = mostSignificantCards[0].rank() * t;
-            if (mostSignificantCards[1] != null) {
-                t         /= 13;
-                handValue += mostSignificantCards[1].rank() * t;
-            }
+        switch (handType) {
+            case STRAIGHT_FLUSH:
+                handValue = cards[0].rank;
+                break;
+            case FOUR_OF_A_KIND:
+                handValue = cards[1].rank; // take index 1 as it is always part of the four of a kind
+                break;
+            case STRAIGHT:
+                handValue = cards[0].rank;
+                break;
+            case FULL_HOUSE:
+                int threeRank = cards[2].rank;
+                int twoRank = cards[0].rank < threeRank ? cards[0].rank : cards[4].rank;
+                handValue = (threeRank << 3) + twoRank;
+                break;
+            case FLUSH:
+                handValue += cards[0].rank << 12;
+                handValue += cards[1].rank << 9;
+                handValue += cards[2].rank << 6;
+                handValue += cards[3].rank << 3;
+                handValue += cards[4].rank;
+                break;
+            case THREE_OF_A_KIND:
+                threeRank = cards[2].rank;
+                handValue = threeRank << 6;
+                int cnt = 1;
+                for (Cards c : cards) {
+                    if (c.rank != threeRank) {
+                        handValue += c.rank << (cnt * 3);
+                        cnt--;
+                    }
+                }
+                break;
+            case TWO_PAIR:
+                int hiPairRank = cards[1].rank;
+                int loPairRank = cards[2].rank;
+                handValue = (hiPairRank << 6) + (loPairRank << 3);
+                if (cards[0].rank != hiPairRank) handValue += cards[0].rank;
+                else if (cards[4].rank != loPairRank) handValue += cards[4].rank;
+                else handValue += cards[2].rank;
+                break;
+            case ONE_PAIR:
+                int opshift = 2;
+                for (int i = 0; i < cards.length; i++) {
+                    if (i + 1 < cards.length && cards[i].rank == cards[i + 1].rank) {
+                        handValue += cards[i].rank << 9;
+                        i++; // Skip next card
+                    } else {
+                        handValue += cards[i].rank << (3 * opshift);
+                        opshift--;
+                    }
+                }
+                break;
+            case HIGH_CARD:
+                int hcshift = 4;
+                for (Cards card : cards) {
+                    handValue += card.rank << (3 * hcshift);
+                    hcshift--;
+                }
+                break;
         }
 
-        // Increase the hand value according to the cards not used in the main hand
-        int s = 0;
-        while (freeCards > 0 && s < cards.length) {
-            if (cards[s] != mostSignificantCards[0] && (mostSignificantCards[1] == null || cards[s] != mostSignificantCards[1])) {
-                freeCards--;
-                t         /= 13;
-                handValue += cards[s].rank() * t;
-            }
-            s++;
-        }
-
-        switch (bestHand) {
-            case STRAIGHT_FLUSH:  handValue += 8000000; break;
-            case FOUR_OF_A_KIND:  handValue += 7000000; break;
-            case FULL_HOUSE:      handValue += 6000000; break;
-            case FLUSH:           handValue += 5000000; break;
-            case STRAIGHT:        handValue += 4000000; break;
-            case THREE_OF_A_KIND: handValue += 3000000; break;
-            case TWO_PAIR:        handValue += 2000000; break;
-            case ONE_PAIR:        handValue += 1000000; break;
-        }
-
-        return handValue;
+        return (handType.ordinal() * 1000000) + handValue;
     }
 
     /**
@@ -353,6 +333,7 @@ public class Probability {
      */
     private class Deck {
         Cards[] cards;
+        int nextCardPtr;
         Random rnd;
 
         private Deck(Cards[] hand, Cards[] table) {
@@ -391,6 +372,8 @@ public class Probability {
                 // c is empty, just put the whole deck in the cards array
                 cards = Cards.values();
             }
+
+            nextCardPtr = 0;
         }
 
         public void shuffle() {
@@ -401,10 +384,12 @@ public class Probability {
                 cards[index] = cards[i];
                 cards[i] = a;
             }
+
+            nextCardPtr = 0;
         }
 
-        public Cards getCard(int x) {
-            return this.cards[x];
+        public Cards drawCard() {
+            return this.cards[nextCardPtr];
         }
     }
 
