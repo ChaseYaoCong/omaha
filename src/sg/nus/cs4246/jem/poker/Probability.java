@@ -8,8 +8,8 @@ public class Probability {
     public static final int OPPONENTS = 1;
     public static final int ITERATIONS = 1000;
 
-    private int[] hand;     // Represents the hand
-    private int[] table;    // Represents to table
+    private Cards[] hand;     // Represents the hand
+    private Cards[] table;    // Represents to table
     private int handCnt;    // How many cards in on the hand (must be 4)
     private int tableCnt;   // How many cards are on the table
     private String[] hands;
@@ -39,44 +39,40 @@ public class Probability {
         CJ, DJ, HJ, SJ,
         CQ, DQ, HQ, SQ,
         CK, DK, HK, SK,
-        CA, DA, HA, SA
-    }
+        CA, DA, HA, SA;
 
-    public static int[] reverse(int[] a) {
-        for (int i = 0; i < a.length / 2; i++) {
-            int tmp = a[i];
-            a[i] = a[a.length - 1 - i];
-            a[a.length - 1 - i] = tmp;
+        public int rank() {
+            return ordinal() >> 2;
         }
-        return a;
-    }
 
+        public int suit() {
+            return ordinal() % 2;
+        }
+    }
 
     public static void main(String[] args) {
-        int[] hand  = new int[]{
-                Cards.C2.ordinal(),
-                Cards.C4.ordinal(),
-                Cards.HT.ordinal(),
-                Cards.H4.ordinal()
+        Cards[] hand  = new Cards[]{
+                Cards.C2,
+                Cards.C4,
+                Cards.H4,
+                Cards.HT
         };
-        int[] board = new int[]{
-                Cards.CT.ordinal(),
-                Cards.ST.ordinal(),
-                Cards.DT.ordinal(),
-                -1,
-                -1
+        Cards[] board = new Cards[]{
+                Cards.CT,
+                Cards.ST,
+                Cards.DT
         };
 
         Probability p = new Probability(hand, board);
         p.calculate();
     }
 
-    public Probability(int[] hand, int[] table) {
+    public Probability(Cards[] hand, Cards[] table) {
         this.hand  = hand;
         this.table = table;
 
-        this.handCnt  = 4;
-        this.tableCnt = 3;
+        this.handCnt  = hand.length;
+        this.tableCnt = table.length;
 
         this.hands = new String[]{
                 "HIGH_CARD",
@@ -111,14 +107,11 @@ public class Probability {
      */
     private double estimateChanceOfWinning() {
         // Create one array containing both cards on hand and on table
-        int[] handAndTable = Arrays.copyOf(hand, handCnt + tableCnt);
-        System.arraycopy(table, 0, handAndTable, handCnt, tableCnt);
-
-        Deck deck = new Deck(handAndTable);
+        Deck deck = new Deck(hand, table);
         int roundsWon = 0;
 
-        int[][] opponentHands = new int[OPPONENTS][4];
-        int[] possibleTable = Arrays.copyOf(table, 5);
+        Cards[][] opponentHands = new Cards[OPPONENTS][4];
+        Cards[] possibleTable = Arrays.copyOf(table, 5);
 
         // Play a number of random games, and count how many games we win
         for (int i = 0; i < ITERATIONS; i++) {
@@ -160,17 +153,17 @@ public class Probability {
      * @param table int array representing the table
      * @return int representing the strength of the hand
      */
-    private static int getBestHandStrength(int[] hand, int[] table) {
+    private static int getBestHandStrength(Cards[] hand, Cards[] table) {
         int strength = 0;
 
         // Run through all possibilities of picking two cards from the hand
         for (int i = 0; i < 3; i++) {
             for (int j = i + 1; j < 4; j++) {
-                int[] handCards = new int[]{hand[i], hand[j]};
+                Cards[] handCards = new Cards[]{hand[i], hand[j]};
 
                 if (table.length < 3) {
                     // No cards on the table
-                    int e = calcHandStrength(handCards, new int[0]);
+                    int e = calcHandStrength(handCards, new Cards[0]);
                     if (e > strength) strength = e;
                 }
                 else {
@@ -178,7 +171,7 @@ public class Probability {
                     for (int x = 0; x < table.length - 2; x++) {
                         for (int y = x + 1; y < table.length - 1; y++) {
                             for (int z = y + 1; z < table.length; z++) {
-                                int[] tableCards = new int[]{table[x], table[y], table[z]};
+                                Cards[] tableCards = new Cards[]{table[x], table[y], table[z]};
                                 int e = calcHandStrength(handCards, tableCards);
                                 if (e > strength) strength = e;
                             }
@@ -190,14 +183,14 @@ public class Probability {
         return strength;
     }
     
-    private static int calcHandStrength(int[] handCards, int[] tableCards) {
-        int[] cards = Arrays.copyOf(tableCards,  tableCards.length + handCards.length);
+    private static int calcHandStrength(Cards[] handCards, Cards[] tableCards) {
+        Cards[] cards = Arrays.copyOf(tableCards,  tableCards.length + handCards.length);
         System.arraycopy(handCards, 0, cards, tableCards.length, handCards.length);
 
         // Reverse sort the array
         Arrays.sort(cards);
         for (int i = 0; i < cards.length / 2; i++) {
-            int tmp = cards[i];
+            Cards tmp = cards[i];
             cards[i] = cards[cards.length - 1 - i];
             cards[cards.length - 1 - i] = tmp;
         }
@@ -249,24 +242,22 @@ public class Probability {
          *
          * Generalized [most significant, other which is part of the hand]
          */
-        int[] ranksOfHand = new int[]{-1, -1};
+        Cards[] ranksOfHand = new Cards[]{null, null};
 
         // Process first card
-        int thisCard = cards[0];
-        int suit = thisCard % 4;
-        flushCounter[suit]++;
+        Cards thisCard = cards[0];
+        flushCounter[thisCard.suit()]++;
 
         // Run through cards and check rank only, i.e. ONE_PAIR, TWO_PAIR,
         // THREE_OF_A_KIND, FULL_HOUSE, FOUR_OF_A_KIND
         int cardsOfThisRank = 1;
         for (int i = 1; i < cards.length; i++) {
             thisCard = cards[i];
-            suit = thisCard % 4;
 
-            flushCounter[suit]++;
+            flushCounter[thisCard.suit()]++;
 
             // This and previous card has same rank
-            if (getRank(cards[i - 1]) == getRank(thisCard)) {
+            if (cards[i - 1].rank() == thisCard.rank()) {
                 cardsOfThisRank++;
 
                 if (cardsOfThisRank == 2 && bestHand < 0) {
@@ -320,10 +311,10 @@ public class Probability {
         // Check for STRAIGHT, FLUSH, and STRAIGHT_FLUSH
         if (bestHand < 0 && cards.length == 5) {
             // Check for STRAIGHT
-            handTypes[3] = (((cards[0] >> 2) - (cards[4] >> 2) == 4) || (cards[4] >> 2 == 3 && cards[0] > 47));
+            handTypes[3] = ((cards[0].rank() - cards[4].rank() == 4) || (cards[4].rank() == 3 && cards[0].ordinal() > 47)); // TODO
 
             // Check for STRAIGHT_FLUSH
-            handTypes[7] = handTypes[3] && flushCounter[cards[0] % 4] == 5;
+            handTypes[7] = handTypes[3] && flushCounter[cards[0].suit()] == 5;
 
             if (handTypes[3] || handTypes[7]) {
                 ranksOfHand[0] = cards[0];
@@ -331,32 +322,32 @@ public class Probability {
             }
 
             // Check for FLUSH
-            if (flushCounter[cards[0] % 4] == 5) {
+            if (flushCounter[cards[0].suit()] == 5) {
                 ranksOfHand[0] = cards[0];
-                handTypes[4] = true;
-                freeCards = 5;
+                handTypes[4]   = true;
+                freeCards      = 5;
             }
         }
 
         int handValue = 0;
-        int t = 28561; // Multiplication factor
+        int t = 28561; // Multiplication factor (13^4)
 
         // Assign a high weight to the cards that affect the hand value, e.g. the rank of a pair
-        if (ranksOfHand[0] != -1) {
-            handValue = (ranksOfHand[0] >> 2) * t;
-            if (ranksOfHand[1] != -1) {
-                t = t / 13;
-                handValue += (ranksOfHand[1] >> 2) * t;
+        if (ranksOfHand[0] != null) {
+            handValue = ranksOfHand[0].rank() * t;
+            if (ranksOfHand[1] != null) {
+                t /= 13;
+                handValue += ranksOfHand[1].rank() * t;
             }
         }
 
         // Increase the hand value according to the cards not used in the main hand
         int s = 0;
         while (freeCards > 0 && s < cards.length) {
-            if (cards[s] != ranksOfHand[0] && (ranksOfHand[1] == -1 || cards[s] != ranksOfHand[1])) {
+            if (cards[s] != ranksOfHand[0] && (ranksOfHand[1] == null || cards[s] != ranksOfHand[1])) {
                 freeCards--;
                 t /= 13;
-                handValue += getRank(cards[s]) * t;
+                handValue += cards[s].rank() * t;
             }
             s++;
         }
@@ -370,10 +361,6 @@ public class Probability {
         else if (handTypes[1]) return 2000000 + handValue;
         else if (handTypes[0]) return 1000000 + handValue;
         else return handValue;
-    }
-
-    private static int getRank(int card) {
-        return card >> 2;
     }
 
     /**
@@ -390,36 +377,44 @@ public class Probability {
      * the players hand or on the table.
      */
     private class Deck {
-        int[] cards;
+        Cards[] cards;
         Random rnd;
 
-        private Deck(int[] c) {
+        private Deck(Cards[] hand, Cards[] table) {
             rnd = new Random();
 
-            if (c.length != 0) {
-                Arrays.sort(c);
+            // Join hand and table into one array of cards
+            Cards[] handAndTable = Arrays.copyOf(hand, handCnt + tableCnt);
+            System.arraycopy(table, 0, handAndTable, handCnt, tableCnt);
 
-                // Create array with the cards still in the deck
-                int d = 52 - c.length;
-                this.cards = new int[d];
-                int e = 0;
-                int f = 0;
-                for (int i = 0; i < 52; i++) {
-                    if (e >= c.length || i < c[e]) {
-                        this.cards[f++] = i;
+            // Create an array containing all remaining cards, i.e. not in hand or on table
+            if (handAndTable.length != 0) {
+                Arrays.sort(handAndTable);
+
+                // Initialize variables
+                this.cards = new Cards[52 - handAndTable.length];
+                int prevOrdinal = -1;
+                int destPtr = 0;
+
+                // Copy all cards except for the ones on hand or table
+                for (Cards c : handAndTable) {
+                    // Skip if the card is right after the previous one (avoid copy of size 0)
+                    if (c.ordinal() == prevOrdinal + 1) {
+                        prevOrdinal++;
+                        continue;
                     }
-                    else if (i == c[e]) {
-                        e++;
-                    }
-                    else {
-                        e++;
-                        i--;
-                    }
+
+                    int chunkSize = c.ordinal() - prevOrdinal - 1;
+                    System.arraycopy(Cards.values(), prevOrdinal + 1, cards, destPtr, chunkSize);
+                    destPtr += chunkSize;
+                    prevOrdinal = c.ordinal();
                 }
+
+                // Copy the rest of the cards
+                System.arraycopy(Cards.values(), prevOrdinal + 1, cards, destPtr, 52 - prevOrdinal - 1);
             } else {
                 // c is empty, just put the whole deck in the cards array
-                this.cards = new int[52];
-                for (int i = 0; i < 52; i++) this.cards[i] = i;
+                cards = Cards.values();
             }
         }
 
@@ -427,13 +422,13 @@ public class Probability {
             for (int i = cards.length - 1; i > 0; i--) {
                 int index = rnd.nextInt(i + 1);
 
-                int a = cards[index];
+                Cards a = cards[index];
                 cards[index] = cards[i];
                 cards[i] = a;
             }
         }
 
-        public int getCard(int x) {
+        public Cards getCard(int x) {
             return this.cards[x];
         }
     }
