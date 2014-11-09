@@ -42,7 +42,7 @@ public class Probability {
         CA, DA, HA, SA;
 
         public int rank() {
-            return ordinal() >> 2;
+            return (ordinal() >> 2) + 2;
         }
 
         public int suit() {
@@ -216,15 +216,12 @@ public class Probability {
          *
          * Corresponds to the ranksOfHand array
          */
-        int bestHand = -1;
+        Hands bestHand = Hands.HIGH_CARD;
 
         /**
-         * Each entry represents a type of hand.
-         * (0) ONE_PAIR (1) TWO_PAIR (2) THREE_OF_A_KIND (3) STRAIGHT
-         * (4) FLUSH (5) FULL_HOUSE (6) FOUR_OF_A_KIND (7) STRAIGHT_FLUSH
+         * Keeps track of whether or not a flush is possible
          */
-        boolean[] handTypes = new boolean[]{false, false, false, false, false, false, false, false};
-        int[] flushCounter = new int[]{0, 0, 0, 0};
+        boolean flush = true;
 
         /**
          * This holds the ranks of the hand we have. If we have one pair it will
@@ -242,64 +239,49 @@ public class Probability {
          *
          * Generalized [most significant, other which is part of the hand]
          */
-        Cards[] ranksOfHand = new Cards[]{null, null};
-
-        // Process first card
-        Cards thisCard = cards[0];
-        flushCounter[thisCard.suit()]++;
+        Cards[] mostSignificantCards = new Cards[]{null, null};
 
         // Run through cards and check rank only, i.e. ONE_PAIR, TWO_PAIR,
         // THREE_OF_A_KIND, FULL_HOUSE, FOUR_OF_A_KIND
         int cardsOfThisRank = 1;
         for (int i = 1; i < cards.length; i++) {
-            thisCard = cards[i];
+            Cards thisCard = cards[i];
 
-            flushCounter[thisCard.suit()]++;
+            flush = flush && cards[i - 1].suit() != thisCard.suit();
 
             // This and previous card has same rank
             if (cards[i - 1].rank() == thisCard.rank()) {
                 cardsOfThisRank++;
 
-                if (cardsOfThisRank == 2 && bestHand < 0) {
+                if (cardsOfThisRank == 2 && bestHand == Hands.HIGH_CARD) {
                     // ONE_PAIR from HIGH_CARD
-                    handTypes[0] = true;
-                    bestHand = 0;
-                    ranksOfHand[0] = cards[i - 1];
+                    bestHand = Hands.ONE_PAIR;
+                    mostSignificantCards[0] = cards[i - 1];
                     freeCards = 3;
                 } else if (cardsOfThisRank == 2) {
                     // TWO_PAIR from ONE_PAIR
-                    handTypes[1] = true;
-                    handTypes[0] = false;
-                    bestHand = 1;
-                    ranksOfHand[1] = cards[i - 1];
+                    bestHand = Hands.TWO_PAIR;
+                    mostSignificantCards[1] = cards[i - 1];
                     freeCards = 1;
-                } else if (cardsOfThisRank == 3 && bestHand == 0) {
+                } else if (cardsOfThisRank == 3 && bestHand == Hands.ONE_PAIR) {
                     // THREE_OF_A_KIND from ONE_PAIR
-                    handTypes[2] = true;
-                    handTypes[0] = false;
-                    bestHand = 2;
+                    bestHand = Hands.THREE_OF_A_KIND;
                     freeCards = 0;
-                } else if (cardsOfThisRank == 2 && bestHand == 2) {
+                } else if (cardsOfThisRank == 2 && bestHand == Hands.THREE_OF_A_KIND) {
                     // FULL_HOUSE from THREE_OF_A_KIND (5, 5, 5, 7, _7_)
-                    handTypes[2] = false;
-                    handTypes[5] = true;
-                    bestHand = 5;
-                    ranksOfHand[1] = cards[i - 1];
+                    bestHand = Hands.FULL_HOUSE;
+                    mostSignificantCards[1] = cards[i - 1];
                     freeCards = 0;
-                } else if (cardsOfThisRank == 3 && bestHand == 1) {
+                } else if (cardsOfThisRank == 3 && bestHand == Hands.TWO_PAIR) {
                     // FULL_HOUSE from TWO_PAIRS (5, 5, 7, 7, _7_)
-                    handTypes[1] = false;
-                    handTypes[5] = true;
-                    bestHand = 5;
-                    ranksOfHand[1] = ranksOfHand[0];
-                    ranksOfHand[0] = cards[i - 1];
+                    bestHand = Hands.FULL_HOUSE;
+                    mostSignificantCards[1] = mostSignificantCards[0];
+                    mostSignificantCards[0] = cards[i - 1];
                     freeCards = 0;
                 } else if (cardsOfThisRank == 4) {
                     // FOUR_OF_A_KIND from WHATEVER
                     // TODO check if bestHand is always THREE_OF_A_KIND
-                    handTypes[6] = true;
-                    handTypes[bestHand] = false;
-                    bestHand = 6;
+                    bestHand = Hands.FOUR_OF_A_KIND;
                     freeCards = 0;
                     break;
                 }
@@ -309,58 +291,51 @@ public class Probability {
         }
 
         // Check for STRAIGHT, FLUSH, and STRAIGHT_FLUSH
-        if (bestHand < 0 && cards.length == 5) {
-            // Check for STRAIGHT
-            handTypes[3] = ((cards[0].rank() - cards[4].rank() == 4) || (cards[4].rank() == 3 && cards[0].ordinal() > 47)); // TODO
+        if (bestHand == Hands.HIGH_CARD && cards.length == 5) {
+            boolean straight = cards[0].rank() - cards[4].rank() == 4 || (cards[4].rank() == 5 && cards[0].rank() == 14);
 
-            // Check for STRAIGHT_FLUSH
-            handTypes[7] = handTypes[3] && flushCounter[cards[0].suit()] == 5;
-
-            if (handTypes[3] || handTypes[7]) {
-                ranksOfHand[0] = cards[0];
-                freeCards = 0;
-            }
-
-            // Check for FLUSH
-            if (flushCounter[cards[0].suit()] == 5) {
-                ranksOfHand[0] = cards[0];
-                handTypes[4]   = true;
-                freeCards      = 5;
+            if (straight || flush) {
+                mostSignificantCards[0] = cards[0];
+                freeCards      = flush ? 5 : 0;
+                bestHand       = (straight && flush) ? Hands.STRAIGHT_FLUSH : (straight ? Hands.STRAIGHT : Hands.FLUSH);
             }
         }
 
         int handValue = 0;
-        int t = 28561; // Multiplication factor (13^4)
+        int t         = 28561; // Multiplication factor (13^4)
 
         // Assign a high weight to the cards that affect the hand value, e.g. the rank of a pair
-        if (ranksOfHand[0] != null) {
-            handValue = ranksOfHand[0].rank() * t;
-            if (ranksOfHand[1] != null) {
-                t /= 13;
-                handValue += ranksOfHand[1].rank() * t;
+        if (mostSignificantCards[0] != null) {
+            handValue = mostSignificantCards[0].rank() * t;
+            if (mostSignificantCards[1] != null) {
+                t         /= 13;
+                handValue += mostSignificantCards[1].rank() * t;
             }
         }
 
         // Increase the hand value according to the cards not used in the main hand
         int s = 0;
         while (freeCards > 0 && s < cards.length) {
-            if (cards[s] != ranksOfHand[0] && (ranksOfHand[1] == null || cards[s] != ranksOfHand[1])) {
+            if (cards[s] != mostSignificantCards[0] && (mostSignificantCards[1] == null || cards[s] != mostSignificantCards[1])) {
                 freeCards--;
-                t /= 13;
+                t         /= 13;
                 handValue += cards[s].rank() * t;
             }
             s++;
         }
 
-        if (handTypes[7]) return 8000000 + handValue;
-        else if (handTypes[6]) return 7000000 + handValue;
-        else if (handTypes[5]) return 6000000 + handValue;
-        else if (handTypes[4]) return 5000000 + handValue;
-        else if (handTypes[3]) return 4000000 + handValue;
-        else if (handTypes[2]) return 3000000 + handValue;
-        else if (handTypes[1]) return 2000000 + handValue;
-        else if (handTypes[0]) return 1000000 + handValue;
-        else return handValue;
+        switch (bestHand) {
+            case STRAIGHT_FLUSH:  handValue += 8000000; break;
+            case FOUR_OF_A_KIND:  handValue += 7000000; break;
+            case FULL_HOUSE:      handValue += 6000000; break;
+            case FLUSH:           handValue += 5000000; break;
+            case STRAIGHT:        handValue += 4000000; break;
+            case THREE_OF_A_KIND: handValue += 3000000; break;
+            case TWO_PAIR:        handValue += 2000000; break;
+            case ONE_PAIR:        handValue += 1000000; break;
+        }
+
+        return handValue;
     }
 
     /**
