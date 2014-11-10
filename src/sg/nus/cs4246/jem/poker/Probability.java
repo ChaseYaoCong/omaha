@@ -79,11 +79,14 @@ public class Probability {
         if (!isLegalState()) return;
 
         // Calculate the probability of winning
+        long t1 = System.currentTimeMillis();
         double chanceOfWinning = estimateChanceOfWinning();
+        long t2 = System.currentTimeMillis();
         System.out.println("Chance of winning: " + chanceOfWinning + "%");
 
         // Get the hand strength (two pairs, full house, etc.)
         System.out.println("You have: " + getBestHandType(hand, table));
+        System.out.println("Time: " + (t2-t1) + "ms");
     }
 
     /**
@@ -389,7 +392,7 @@ public class Probability {
         }
 
         public Cards drawCard() {
-            return this.cards[nextCardPtr];
+            return this.cards[nextCardPtr++];
         }
     }
 
