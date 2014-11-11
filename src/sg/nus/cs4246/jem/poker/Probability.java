@@ -24,7 +24,7 @@ public class Probability {
         STRAIGHT_FLUSH
     }
 
-    private enum Cards {
+    public enum Cards {
         C2, D2, H2, S2,
         C3, D3, H3, S3,
         C4, D4, H4, S4,
@@ -74,19 +74,12 @@ public class Probability {
     }
 
     // Start the calculation
-    private void calculate() {
+    public double calculate() {
         // If the number of cards in the hand or on the table are not correct
-        if (!isLegalState()) return;
+        if (!isLegalState()) throw new IllegalStateException("State is not valid");
 
         // Calculate the probability of winning
-        long t1 = System.currentTimeMillis();
-        double chanceOfWinning = estimateChanceOfWinning();
-        long t2 = System.currentTimeMillis();
-        System.out.println("Chance of winning: " + chanceOfWinning + "%");
-
-        // Get the hand strength (two pairs, full house, etc.)
-        System.out.println("You have: " + getBestHandType(hand, table));
-        System.out.println("Time: " + (t2-t1) + "ms");
+        return estimateChanceOfWinning();
     }
 
     /**

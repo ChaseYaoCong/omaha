@@ -12,9 +12,7 @@
 
 package sg.nus.cs4246.jem.bot;
 
-import sg.nus.cs4246.jem.poker.Card;
-import sg.nus.cs4246.jem.poker.HandOmaha;
-import sg.nus.cs4246.jem.poker.PokerMove;
+import sg.nus.cs4246.jem.poker.*;
 
 import com.stevebrecher.HandEval;
 
@@ -22,6 +20,13 @@ import com.stevebrecher.HandEval;
  * This class is the brains of your sg.nus.cs4246.jem.bot. Make your calculations here and return the best move with GetMove
  */
 public class BotStarter implements Bot {
+
+    private BetStrategy betStrategy;
+    private int[] amountBet = new int[]{0, 0, 0, 0};
+
+    public BotStarter() {
+        betStrategy = new BetStrategy();
+    }
 
 	/**
 	 * Implement this method to return the best move you can. Currently it will return a raise the average ordinal value 
@@ -34,34 +39,33 @@ public class BotStarter implements Bot {
 	@Override
 	public PokerMove getMove(BotState state, Long timeOut) {
 		HandOmaha hand = state.getHand();
-		String handCategory = getHandCategory(hand, state.getTable()).toString();
-		System.err.printf("my hand is %s, opponent action is %s, pot: %d\n", handCategory, state.getOpponentAction(), state.getPot());
-		
-		// Get the ordinal values of the cards in your hand
-		int[] ordinalHand = {
-			hand.getCard(0).getHeight().ordinal(),
-			hand.getCard(1).getHeight().ordinal(),
-			hand.getCard(2).getHeight().ordinal(),
-			hand.getCard(3).getHeight().ordinal()
-		};
-		
-		// Get the average ordinal value
-		double averageOrdinalValue = 0;
-		for(int i=0; i<ordinalHand.length; i++) {
-			averageOrdinalValue += ordinalHand[i];
-		}
-		averageOrdinalValue /= ordinalHand.length;
-		
-		// Return the appropriate move according to our amazing strategy
-		if( averageOrdinalValue >= 9 ) {
-			return new PokerMove(state.getMyName(), "raise", 2*state.getBigBlind());
-		} else if( averageOrdinalValue >= 5 ) {
-			return new PokerMove(state.getMyName(), "call", state.getAmountToCall());
-		} else {
-			return new PokerMove(state.getMyName(), "check", 0);
-		}
+//		String handCategory = getHandCategory(hand, state.getTable()).toString();
+//		System.err.printf("my hand is %s, opponent action is %s, pot: %d\n", handCategory, state.getOpponentAction(), state.getPot());
+
+        // Calculate the probability to win the game
+        Probability.Cards[] probHand = new Probability.Cards[]{
+                convertCardToProbCard(hand.getCard(0)),
+                convertCardToProbCard(hand.getCard(1)),
+                convertCardToProbCard(hand.getCard(2)),
+                convertCardToProbCard(hand.getCard(3))
+        };
+        Probability.Cards[] probTable = new Probability.Cards[state.getTable().length];
+        for (int i = 0; i < probTable.length; i++) {
+            probTable[i] = convertCardToProbCard(state.getTable()[i]);
+        }
+
+        int round = state.getRound() - 1;
+
+        double winProb = new Probability(probHand, probTable).calculate();
+        BetStrategy.Round currentRound = convertIntToRound(round);
+
+        // Calculate the bet amount
+        int betAmount = betStrategy.getBetAmount(winProb, currentRound, state.getSmallBlind(), state.getmyStack());
+        if (betAmount <= amountBet[round]) return new PokerMove(state.getMyName(), "check", 0);
+        amountBet[round] += betAmount; // TODO for some reason this line makes the bot timeout in the last betting round
+        return new PokerMove(state.getMyName(), "raise", betAmount);
 	}
-	
+
 	/**
 	 * Quite a tedious method to check what we have in our hand. With 5 cards on the table we do 60(!) checks: all possible
 	 * combinations of 2 out of 4 cards (our hand) times all possible combinations of 3 out of 5 cards (the table).
@@ -129,12 +133,26 @@ public class BotStarter implements Bot {
 		return HandEval.HandCategory.values()[rank >> HandEval.VALUE_SHIFT];
 	}
 
-	/**
-	 * @param args
-	 */
 	public static void main(String[] args) {
 		BotParser parser = new BotParser(new BotStarter());
 		parser.run();
 	}
+
+    private Probability.Cards convertCardToProbCard(Card c) {
+        int rank = c.getHeight().ordinal();
+        int suit = 0;
+        switch (c.getSuit()) {
+            case SPADES:   suit = 3; break;
+            case HEARTS:   suit = 2; break;
+            case CLUBS:    suit = 0; break;
+            case DIAMONDS: suit = 1; break;
+        }
+
+        return Probability.Cards.values()[rank * 4 + suit];
+    }
+
+    private BetStrategy.Round convertIntToRound(int i) {
+        return BetStrategy.Round.values()[i];
+    }
 
 }
