@@ -29,7 +29,7 @@ public class BotStarter implements Bot {
     }
 
 	/**
-	 * Implement this method to return the best move you can. Currently it will return a raise the average ordinal value 
+	 * Implement this method to return the best move you can. Currently it will return a raise the average ordinal value
 	 * of your hand is higher than 9, a call when the average ordinal value is at least 6 and a check otherwise.
 	 * As you can see, it will only consider it's current hand, not what's on the table.
 	 * @param state : The current state of your sg.nus.cs4246.jem.bot, with all the (parsed) information given by the engine
@@ -38,7 +38,7 @@ public class BotStarter implements Bot {
 	 */
 	@Override
 	public PokerMove getMove(BotState state, Long timeOut) {
-		HandOmaha hand = state.getHand();
+        HandOmaha hand = state.getHand();
 //		String handCategory = getHandCategory(hand, state.getTable()).toString();
 //		System.err.printf("my hand is %s, opponent action is %s, pot: %d\n", handCategory, state.getOpponentAction(), state.getPot());
 
@@ -59,12 +59,29 @@ public class BotStarter implements Bot {
         double winProb = new Probability(probHand, probTable).calculate();
         BetStrategy.Round currentRound = convertIntToRound(round);
 
-        // Calculate the bet amount
-        int betAmount = betStrategy.getBetAmount(winProb, currentRound, state.getSmallBlind(), state.getmyStack());
-        if (betAmount <= amountBet[round]) return new PokerMove(state.getMyName(), "check", 0);
-        amountBet[round] += betAmount; // TODO for some reason this line makes the bot timeout in the last betting round
-        return new PokerMove(state.getMyName(), "raise", betAmount);
-	}
+        int amountToCall = state.getAmountToCall();
+        // Calculate the hypothetical bet amount
+        int betAmount = betStrategy.getBetAmount(winProb, currentRound, state.getSmallBlind(), state.getmyStack(), state.getPot());
+        if (amountToCall == 0) { // we can decide then to check or to bet.
+            //TODO function to check
+            if (betAmount <= amountBet[round]) return new PokerMove(state.getMyName(), "check", 0);
+            amountBet[round] += betAmount; // TODO for some reason this line makes the bot timeout in the last betting round
+            return new PokerMove(state.getMyName(), "raise", betAmount);
+        } else {
+            //we can decide here to call, bet more or to fold
+            if (betAmount > amountToCall) {//if the amount we would have normally planned to bet is more than the amount to call
+                return new PokerMove(state.getMyName(), "raise", 0);
+            }
+            else{
+
+            }
+        }
+
+return null;
+    }
+
+
+
 
 	/**
 	 * Quite a tedious method to check what we have in our hand. With 5 cards on the table we do 60(!) checks: all possible
@@ -138,7 +155,7 @@ public class BotStarter implements Bot {
     */
 	public static void main(String[] args) {
 		BotParser parser = new BotParser(new BotStarter());
-		parser.run();
+        parser.run();
 	}
 
     private Probability.Cards convertCardToProbCard(Card c) {

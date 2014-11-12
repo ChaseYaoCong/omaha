@@ -2,6 +2,9 @@ package sg.nus.cs4246.jem.poker;
 
 import java.util.Random;
 
+//Here we assume we are playing first, we then have to decide how much we are going to bet
+// (folding is nerver a good option here as we can always bet 0 instead)
+
 public class BetStrategy {
 
     public enum Round {PRE_FLOP, FLOP, TURN, RIVER}
@@ -15,24 +18,28 @@ public class BetStrategy {
      * @param round the current round
      * @param smallBlind size of the small blind
      * @param chips the amount of chips we have
+     * @param potAmount: the amount in the pot in the center of the table.
      * @return the amount of chips to bet (-1 means fold)
      */
-    public int getBetAmount(double probabilityOfWin, Round round, int smallBlind, int chips) {
-        double foldPayoff   = -1 * smallBlind;
-        double[] betPayoff  = getBetPayoff(probabilityOfWin, smallBlind, round);
+    public int getBetAmount(double probabilityOfWin, Round round, int smallBlind, int chips,int potAmount) {
+//        double foldPayoff   = -1 * smallBlind; //TODO when we are little blind, we begin twice, then the other player will begin every other rounds
+//        double[] betPayoff  = getBetPayoff(probabilityOfWin, smallBlind, round);
+//
+//        double intersection = (foldPayoff - betPayoff[1]) / betPayoff[0];
+//        int maxBetAmount    = selectBetAmount(chips);
+//
+//        // We will only bet if our selected bet amount yields a higher expected reward than folding
+//        if (maxBetAmount < intersection) return -1;
 
-        double intersection = (foldPayoff - betPayoff[1]) / betPayoff[0];
-        int maxBetAmount    = selectBetAmount(chips);
-
-        // We will only bet if our selected bet amount yields a higher expected reward than folding
-        if (maxBetAmount < intersection) return -1;
-        return maxBetAmount;
+        double foldPayoff = -potAmount;
+//        return maxBetAmount;
+        return 0;
     }
 
     /**
      * We select our bet amount according to a logarithmic function because we
      * are afraid of loosing too much, so we are more reluctant to bet higher
-     * amounts
+     * amounts //TODO be careful, the logarithm function must depend on the total amount of money the player still have AND the probability to win
      * @param chips the amount of chips we have
      * @return the highest suggested bet amount
      */
@@ -145,7 +152,7 @@ public class BetStrategy {
 
 
     public static void main(String[] args) {
-        System.out.println(new BetStrategy().getBetAmount(0.45, Round.PRE_FLOP, 15, 1000));
+//        System.out.println(new BetStrategy().getBetAmount(0.45, Round.PRE_FLOP, 15, 1000));
 //        System.out.println(new BetImpl().getBetAmount(0.4415, 15, 1000));
     }
 }
